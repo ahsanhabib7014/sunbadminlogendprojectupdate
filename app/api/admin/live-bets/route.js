@@ -125,8 +125,8 @@ export async function GET(request) {
   try {
     await dbConnect();
 
-    // সেন্ট্রালাইজড অথেন্টিকেশন চেক (অ্যাডমিন এবং সাব-অ্যাডমিন উভয়ের জন্য)
-    const auth = await verifyAuth("admin");
+    // সেন্ট্রালাইজড অথেন্টিকেশন চেক (অ্যাডমিন এবং সাব-অ্যাডমিন 'view_game_tracking' পারমিশনসহ)
+    const auth = await verifyAuth("admin", "view_game_tracking");
     if (!auth.success) {
       return NextResponse.json(
         {
