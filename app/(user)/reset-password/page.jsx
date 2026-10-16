@@ -122,6 +122,7 @@ export default function ResetPasswordPage() {
           <label className="text-xs text-slate-400">৪ ডিজিটের রিসেট পিন</label>
           <input
             type="password"
+            inputMode="numeric"
             value={pin}
             onChange={handlePinChange}
             maxLength={4}

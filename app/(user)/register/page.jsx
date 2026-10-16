@@ -166,6 +166,7 @@ function RegisterForm() {
           </label>
           <input
             type="password"
+            inputMode="numeric"
             value={pin}
             onChange={handlePinChange}
             maxLength={4}
