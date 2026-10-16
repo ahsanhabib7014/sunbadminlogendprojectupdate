@@ -1,567 +1,9 @@
-// // // import jwt from 'jsonwebtoken';
-// // // import dbConnect from '@/utils/db';
-// // // import User from '@/models/User';
-// // // import { cookies } from 'next/headers';
-
-// // // // ==========================================
-// // // // ১. পুরনো ফাংশনসমূহ (backward compatibility)
-// // // // ==========================================
-
-// // // export function verifyJwtToken(req) {
-// // //   try {
-// // //     const authHeader = req.headers.get('authorization');
-    
-// // //     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-// // //       return { 
-// // //         success: false, 
-// // //         message: 'অনুমোদিত নয়! টোকেন পাওয়া যায়নি।' 
-// // //       };
-// // //     }
-
-// // //     const token = authHeader.split(' ')[1];
-// // //     // ✅ Algorithm pinning যোগ করা হলো
-// // //     const decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
-
-// // //     return { 
-// // //       success: true, 
-// // //       userId: decoded.userId, 
-// // //       uid: decoded.uid, 
-// // //       phone: decoded.phone 
-// // //     };
-
-// // //   } catch (error) {
-// // //     return { 
-// // //       success: false, 
-// // //       message: 'টোকেন মেয়াদোত্তীর্ণ বা অবৈধ।' 
-// // //     };
-// // //   }
-// // // }
-
-// // // export async function verifyActiveUser(userIdOrUid) {
-// // //   try {
-// // //     await dbConnect();
-    
-// // //     const query = userIdOrUid?.match(/^[0-9a-fA-F]{24}$/) 
-// // //       ? { _id: userIdOrUid } 
-// // //       : { uid: userIdOrUid };
-
-// // //     const user = await User.findOne(query);
-    
-// // //     if (!user) {
-// // //       return { success: false, message: 'ইউজার পাওয়া যায়নি।' };
-// // //     }
-
-// // //     if (user.isBlocked) {
-// // //       return { 
-// // //         success: false, 
-// // //         isBlocked: true, 
-// // //         message: 'আপনার অ্যাকাউন্টটি ব্লক থাকায় এই সেবাটি বন্ধ রয়েছে।' 
-// // //       };
-// // //     }
-
-// // //     return { success: true, user };
-// // //   } catch (error) {
-// // //     return { success: false, message: 'সার্ভার এরর: ' + error.message };
-// // //   }
-// // // }
-
-
-// // // // ==========================================
-// // // // ২. HttpOnly কুকি ভিত্তিক অথ হেল্পার (Secure)
-// // // // ==========================================
-
-// // // /**
-// // //  * শুধুমাত্র HttpOnly `token` কুকি থেকে অথেন্টিকেশন করে।
-// // //  * কোনো fallback কুকি ব্যবহার করা হয় না (security-র জন্য)।
-// // //  * @param {string} requiredRole - 'user' অথবা 'admin'
-// // //  */
-// // // export async function verifyAuth(requiredRole = 'user') {
-// // //   try {
-// // //     await dbConnect();
-// // //     const cookieStore = await cookies();
-
-// // //     // ✅ শুধু HttpOnly token কুকি থেকে auth
-// // //     const token = cookieStore.get('token')?.value;
-
-// // //     if (!token) {
-// // //       return { 
-// // //         success: false, 
-// // //         status: 401, 
-// // //         message: 'অনুমোদিত নয়! কোনো বৈধ সেশন কুকি পাওয়া যায়নি।' 
-// // //       };
-// // //     }
-
-// // //     let decoded;
-// // //     try {
-// // //       // ✅ Algorithm pinning — downgrade attack প্রতিরোধ
-// // //       decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
-// // //     } catch (err) {
-// // //       return { 
-// // //         success: false, 
-// // //         status: 401, 
-// // //         message: 'মেয়াদোত্তীর্ণ বা অবৈধ সেশন টোকেন!' 
-// // //       };
-// // //     }
-
-// // //     const userId = decoded.userId || decoded.id;
-// // //     const userUid = decoded.uid;
-// // //     const userPhone = decoded.phone;
-
-// // //     // DB query-র জন্য conditions তৈরি
-// // //     const conditions = [];
-// // //     if (userId) conditions.push({ _id: userId });
-// // //     if (userUid) conditions.push({ uid: userUid });
-// // //     if (userPhone) conditions.push({ phone: userPhone });
-
-// // //     if (conditions.length === 0) {
-// // //       return { 
-// // //         success: false, 
-// // //         status: 401, 
-// // //         message: 'টোকেনে কোনো বৈধ ইউজার আইডি নেই!' 
-// // //       };
-// // //     }
-
-// // //     // DB থেকে রিয়েল-টাইম ইউজার
-// // //     const dbUser = await User.findOne({ $or: conditions }).lean();
-
-// // //     if (!dbUser) {
-// // //       return { 
-// // //         success: false, 
-// // //         status: 401, 
-// // //         message: 'ইউজার ডাটাবেজে খুঁজে পাওয়া যায়নি।' 
-// // //       };
-// // //     }
-
-// // //     if (dbUser.isBlocked === true) {
-// // //       return { 
-// // //         success: false, 
-// // //         status: 403, 
-// // //         message: 'আপনার অ্যাকাউন্টটি ব্লক করা হয়েছে।' 
-// // //       };
-// // //     }
-
-// // //     if (requiredRole === 'admin' && dbUser.role !== 'admin') {
-// // //       return { 
-// // //         success: false, 
-// // //         status: 403, 
-// // //         message: 'প্রবেশাধিকার নিষিদ্ধ! আপনার অ্যাডমিন পারমিশন নেই।' 
-// // //       };
-// // //     }
-
-// // //     return { success: true, user: dbUser };
-
-// // //   } catch (error) {
-// // //     console.error('Auth verification error:', error);
-// // //     return { 
-// // //       success: false, 
-// // //       status: 401, 
-// // //       message: 'মেয়াদোত্তীর্ণ বা অবৈধ সেশন টোকেন!' 
-// // //     };
-// // //   }
-// // // }
-
-// // // /////////////////////////////////////////////////////////////
-
-// // import jwt from 'jsonwebtoken';
-// // import dbConnect from '@/utils/db';
-// // import User from '@/models/User';
-// // import { cookies } from 'next/headers';
-
-// // // ==========================================
-// // // ১. পুরনো ফাংশনসমূহ (backward compatibility)
-// // // ==========================================
-
-// // export function verifyJwtToken(req) {
-// //   try {
-// //     const authHeader = req.headers.get('authorization');
-    
-// //     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-// //       return { 
-// //         success: false, 
-// //         message: 'অনুমোদিত নয়! টোকেন পাওয়া যায়নি।' 
-// //       };
-// //     }
-
-// //     const token = authHeader.split(' ')[1];
-// //     const decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
-
-// //     return { 
-// //       success: true, 
-// //       userId: decoded.userId, 
-// //       uid: decoded.uid, 
-// //       phone: decoded.phone 
-// //     };
-
-// //   } catch (error) {
-// //     return { 
-// //       success: false, 
-// //       message: 'টোকেন মেয়াদোত্তীর্ণ বা অবৈধ।' 
-// //     };
-// //   }
-// // }
-
-// // export async function verifyActiveUser(userIdOrUid) {
-// //   try {
-// //     await dbConnect();
-    
-// //     const query = userIdOrUid?.match(/^[0-9a-fA-F]{24}$/) 
-// //       ? { _id: userIdOrUid } 
-// //       : { uid: userIdOrUid };
-
-// //     const user = await User.findOne(query);
-    
-// //     if (!user) {
-// //       return { success: false, message: 'ইউজার পাওয়া যায়নি।' };
-// //     }
-
-// //     if (user.isBlocked) {
-// //       return { 
-// //         success: false, 
-// //         isBlocked: true, 
-// //         message: 'আপনার অ্যাকাউন্টটি ব্লক থাকায় এই সেবাটি বন্ধ রয়েছে।' 
-// //       };
-// //     }
-
-// //     return { success: true, user };
-// //   } catch (error) {
-// //     return { success: false, message: 'সার্ভার এরর: ' + error.message };
-// //   }
-// // }
-
-
-// // // ==========================================
-// // // ২. HttpOnly কুকি ভিত্তিক অথ ও পারমিশন হেল্পার (Secure & RBAC)
-// // // ==========================================
-
-// // /**
-// //  * HttpOnly `token` কুকি থেকে অথেন্টিকেশন এবং সাব-অ্যাডমিন পারমিশন চেক করে।
-// //  * @param {string} requiredRole - 'user' অথবা 'admin'
-// //  * @param {string|null} requiredPermission - নির্দিষ্ট কোনো পারমিশন (যেমন: 'view_deposits')
-// //  */
-// // export async function verifyAuth(requiredRole = 'user', requiredPermission = null) {
-// //   try {
-// //     await dbConnect();
-// //     const cookieStore = await cookies();
-
-// //     const token = cookieStore.get('token')?.value;
-
-// //     if (!token) {
-// //       return { 
-// //         success: false, 
-// //         status: 401, 
-// //         message: 'অনুমোদিত নয়! কোনো বৈধ সেশন কুকি পাওয়া যায়নি।' 
-// //       };
-// //     }
-
-// //     let decoded;
-// //     try {
-// //       decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
-// //     } catch (err) {
-// //       return { 
-// //         success: false, 
-// //         status: 401, 
-// //         message: 'মেয়াদোত্তীর্ণ বা অবৈধ সেশন টোকেন!' 
-// //       };
-// //     }
-
-// //     const userId = decoded.userId || decoded.id;
-// //     const userUid = decoded.uid;
-// //     const userPhone = decoded.phone;
-
-// //     const conditions = [];
-// //     if (userId) conditions.push({ _id: userId });
-// //     if (userUid) conditions.push({ uid: userUid });
-// //     if (userPhone) conditions.push({ phone: userPhone });
-
-// //     if (conditions.length === 0) {
-// //       return { 
-// //         success: false, 
-// //         status: 401, 
-// //         message: 'টোকেনে কোনো বৈধ ইউজার আইডি নেই!' 
-// //       };
-// //     }
-
-// //     const dbUser = await User.findOne({ $or: conditions }).lean();
-
-// //     if (!dbUser) {
-// //       return { 
-// //         success: false, 
-// //         status: 401, 
-// //         message: 'ইউজার ডাটাবেজে খুঁজে পাওয়া যায়নি।' 
-// //       };
-// //     }
-
-// //     if (dbUser.isBlocked === true) {
-// //       return { 
-// //         success: false, 
-// //         status: 403, 
-// //         message: 'আপনার অ্যাকাউন্টটি ব্লক করা হয়েছে।' 
-// //       };
-// //     }
-
-// //     // 🌟 ৩. নতুন রোল ও পারমিশন লজিক (Role & Permission Check)
-// //     if (requiredRole === 'admin') {
-// //       // যদি মূল সুপার অ্যাডমিন হয়, তবে সে সব এক্সেস পাবে
-// //       if (dbUser.role === 'admin') {
-// //         return { success: true, user: dbUser };
-// //       }
-
-// //       // যদি সাব-অ্যাডমিন হয়
-// //       if (dbUser.role === 'sub-admin') {
-// //         // যদি নির্দিষ্ট কোনো পারমিশন চেক করার প্রয়োজন হয়
-// //         if (requiredPermission) {
-// //           if (dbUser.permissions && dbUser.permissions.includes(requiredPermission)) {
-// //             return { success: true, user: dbUser };
-// //           } else {
-// //             return { 
-// //               success: false, 
-// //               status: 403, 
-// //               message: 'অ্যাক্সেস ডিনাইড! এই সেকশনটি দেখার আপনার অনুমতি নেই।' 
-// //             };
-// //           }
-// //         }
-// //         // কোনো নির্দিষ্ট পারমিশন পাস না করলে সাধারণ সাব-অ্যাডমিন ড্যাশবোর্ড এক্সেস দিতে পারেন
-// //         return { success: true, user: dbUser };
-// //       }
-
-// //       // ইউজার সাধারণ হলে ব্লক হবে
-// //       return { 
-// //         success: false, 
-// //         status: 403, 
-// //         message: 'প্রবেশাধিকার নিষিদ্ধ! আপনার অ্যাডমিন পারমিশন নেই।' 
-// //       };
-// //     }
-
-// //     return { success: true, user: dbUser };
-
-// //   } catch (error) {
-// //     console.error('Auth verification error:', error);
-// //     return { 
-// //       success: false, 
-// //       status: 401, 
-// //       message: 'মেয়াদোত্তীর্ণ বা অবৈধ সেশন টোকেন!' 
-// //     };
-// //   }
-// // }
-
-
-// // //////////////////////////////////////////////////////
-
-// import jwt from 'jsonwebtoken';
-// import dbConnect from '@/utils/db';
-// import User from '@/models/User';
-// import AuditLog from '@/models/AuditLog'; // ✅ অডিট লগ মডেল ইমপোর্ট করা হলো
-// import { cookies } from 'next/headers';
-
-// // ==========================================
-// // ১. পুরনো ফাংশনসমূহ (backward compatibility)
-// // ==========================================
-
-// export function verifyJwtToken(req) {
-//   try {
-//     const authHeader = req.headers.get('authorization');
-    
-//     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-//       return { 
-//         success: false, 
-//         message: 'অনুমোদিত নয়! টোকেন পাওয়া যায়নি।' 
-//       };
-//     }
-
-//     const token = authHeader.split(' ')[1];
-//     const decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
-
-//     return { 
-//       success: true, 
-//       userId: decoded.userId, 
-//       uid: decoded.uid, 
-//       phone: decoded.phone 
-//     };
-
-//   } catch (error) {
-//     return { 
-//       success: false, 
-//       message: 'টোকেন মেয়াদোত্তীর্ণ বা অবৈধ।' 
-//     };
-//   }
-// }
-
-// export async function verifyActiveUser(userIdOrUid) {
-//   try {
-//     await dbConnect();
-    
-//     const query = userIdOrUid?.match(/^[0-9a-fA-F]{24}$/) 
-//       ? { _id: userIdOrUid } 
-//       : { uid: userIdOrUid };
-
-//     const user = await User.findOne(query);
-    
-//     if (!user) {
-//       return { success: false, message: 'ইউজার পাওয়া যায়নি।' };
-//     }
-
-//     if (user.isBlocked) {
-//       return { 
-//         success: false, 
-//         isBlocked: true, 
-//         message: 'আপনার অ্যাকাউন্টটি ব্লক থাকায় এই সেবাটি বন্ধ রয়েছে।' 
-//       };
-//     }
-
-//     return { success: true, user };
-//   } catch (error) {
-//     return { success: false, message: 'সার্ভার এরর: ' + error.message };
-//   }
-// }
-
-
-// // ==========================================
-// // ২. HttpOnly কুকি ভিত্তিক অথ ও পারমিশন হেল্পার (Secure, RBAC & Auto Audit Log)
-// // ==========================================
-
-// /**
-//  * HttpOnly `token` কুকি থেকে অথেন্টিকেশন এবং সাব-অ্যাডমিন পারমিশন চেক করে।
-//  * @param {string} requiredRole - 'user' অথবা 'admin'
-//  * @param {string|null} requiredPermission - নির্দিষ্ট কোনো পারমিশন (যেমন: 'view_deposits')
-//  * @param {Request|null} req - Next.js Request অবজেক্ট (অটো-লগিংয়ের জন্য অপশনাল)
-//  * @param {string} customAction - কাস্টম অ্যাকশন নাম (যদি দিতে চান)
-//  */
-// export async function verifyAuth(requiredRole = 'user', requiredPermission = null, req = null, customAction = null) {
-//   try {
-//     await dbConnect();
-//     const cookieStore = await cookies();
-
-//     const token = cookieStore.get('token')?.value;
-
-//     if (!token) {
-//       return { 
-//         success: false, 
-//         status: 401, 
-//         message: 'অনুমোদিত নয়! কোনো বৈধ সেশন কুকি পাওয়া যায়নি।' 
-//       };
-//     }
-
-//     let decoded;
-//     try {
-//       decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
-//     } catch (err) {
-//       return { 
-//         success: false, 
-//         status: 401, 
-//         message: 'মেয়াদোত্তীর্ণ বা অবৈধ সেশন টোকেন!' 
-//       };
-//     }
-
-//     const userId = decoded.userId || decoded.id;
-//     const userUid = decoded.uid;
-//     const userPhone = decoded.phone;
-
-//     const conditions = [];
-//     if (userId) conditions.push({ _id: userId });
-//     if (userUid) conditions.push({ uid: userUid });
-//     if (userPhone) conditions.push({ phone: userPhone });
-
-//     if (conditions.length === 0) {
-//       return { 
-//         success: false, 
-//         status: 401, 
-//         message: 'টোকেনে কোনো বৈধ ইউজার আইডি নেই!' 
-//       };
-//     }
-
-//     const dbUser = await User.findOne({ $or: conditions }).lean();
-
-//     if (!dbUser) {
-//       return { 
-//         success: false, 
-//         status: 401, 
-//         message: 'ইউজার ডাটাবেজে খুঁজে পাওয়া যায়নি।' 
-//       };
-//     }
-
-//     if (dbUser.isBlocked === true) {
-//       return { 
-//         success: false, 
-//         status: 403, 
-//         message: 'আপনার অ্যাকাউন্টটি ব্লক করা হয়েছে।' 
-//       };
-//     }
-
-//     // 🌟 ৩. রোল ও পারমিশন লজিক (Role & Permission Check)
-//     if (requiredRole === 'admin') {
-//       if (dbUser.role === 'admin') {
-//         // সুপার অ্যাডমিন সফল হলে চেক করবে কোনো রাইটিং রিকোয়েস্ট (POST/PATCH/PUT) আছে কি না
-//         await handleAutoAuditLog(req, dbUser, customAction);
-//         return { success: true, user: dbUser };
-//       }
-
-//       if (dbUser.role === 'sub-admin') {
-//         if (requiredPermission) {
-//           if (dbUser.permissions && dbUser.permissions.includes(requiredPermission)) {
-//             await handleAutoAuditLog(req, dbUser, customAction);
-//             return { success: true, user: dbUser };
-//           } else {
-//             return { 
-//               success: false, 
-//               status: 403, 
-//               message: 'অ্যাক্সেস ডিনাইড! এই সেকশনটি দেখার আপনার অনুমতি নেই।' 
-//             };
-//           }
-//         }
-//         await handleAutoAuditLog(req, dbUser, customAction);
-//         return { success: true, user: dbUser };
-//       }
-
-//       return { 
-//         success: false, 
-//         status: 403, 
-//         message: 'প্রবেশাধিকার নিষিদ্ধ! আপনার অ্যাডমিন পারমিশন নেই।' 
-//       };
-//     }
-
-//     return { success: true, user: dbUser };
-
-//   } catch (error) {
-//     console.error('Auth verification error:', error);
-//     return { 
-//       success: false, 
-//       status: 401, 
-//       message: 'মেয়াদোত্তীর্ণ বা অবৈধ সেশন টোকেন!' 
-//     };
-//   }
-// }
-
-// // 🌟 ৪. হেল্পার ফাংশন: সাব-অ্যাডমিনের অ্যাকশন অটো-লগ করার জন্য
-// async function handleAutoAuditLog(req, dbUser, customAction) {
-//   try {
-//     if (!req) return;
-//     const method = req.method || 'UNKNOWN';
-
-//     // শুধুমাত্র ডেটা পরিবর্তন বা এপ্রুভ করার সময় (POST, PATCH, PUT, DELETE) লগ রেকর্ড করবে
-//     if (['POST', 'PATCH', 'PUT', 'DELETE'].includes(method)) {
-//       const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || '127.0.0.1';
-//       const pathname = req.nextUrl ? req.nextUrl.pathname : 'API_ACTION';
-
-//       await AuditLog.create({
-//         adminId: dbUser._id,
-//         adminPhone: dbUser.phone || dbUser.uid || 'Admin',
-//         action: customAction || `${method}_${pathname}`,
-//         targetUser: 'N/A',
-//         details: `${dbUser.role === 'sub-admin' ? 'সাব-অ্যাডমিন' : 'অ্যাডমিন'} (${dbUser.phone}) কর্তৃক ${pathname} এ রিকোয়েস্ট সম্পন্ন হয়েছে।`,
-//         ipAddress: ip
-//       });
-//     }
-//   } catch (logErr) {
-//     console.error('Auto audit log error:', logErr);
-//   }
-// }
-
 // ////////////////////////////////////////////////////////////////////
-import jwt from 'jsonwebtoken';
-import dbConnect from '@/utils/db';
-import User from '@/models/User';
-import AuditLog from '@/models/AuditLog';
-import { cookies } from 'next/headers';
+import jwt from "jsonwebtoken";
+import dbConnect from "@/utils/db";
+import User from "@/models/User";
+import AuditLog from "@/models/AuditLog";
+import { cookies } from "next/headers";
 
 // ==========================================
 // ১. পুরনো ফাংশনসমূহ (backward compatibility)
@@ -569,29 +11,30 @@ import { cookies } from 'next/headers';
 
 export function verifyJwtToken(req) {
   try {
-    const authHeader = req.headers.get('authorization');
-    
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return { 
-        success: false, 
-        message: 'অনুমোদিত নয়! টোকেন পাওয়া যায়নি।' 
+    const authHeader = req.headers.get("authorization");
+
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return {
+        success: false,
+        message: "অনুমোদিত নয়! টোকেন পাওয়া যায়নি।",
       };
     }
 
-    const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
+    const token = authHeader.split(" ")[1];
+    const decoded = jwt.verify(token, process.env.JWT_SECRET, {
+      algorithms: ["HS256"],
+    });
 
-    return { 
-      success: true, 
-      userId: decoded.userId, 
-      uid: decoded.uid, 
-      phone: decoded.phone 
+    return {
+      success: true,
+      userId: decoded.userId,
+      uid: decoded.uid,
+      phone: decoded.phone,
     };
-
   } catch (error) {
-    return { 
-      success: false, 
-      message: 'টোকেন মেয়াদোত্তীর্ণ বা অবৈধ।' 
+    return {
+      success: false,
+      message: "টোকেন মেয়াদোত্তীর্ণ বা অবৈধ।",
     };
   }
 }
@@ -599,59 +42,65 @@ export function verifyJwtToken(req) {
 export async function verifyActiveUser(userIdOrUid) {
   try {
     await dbConnect();
-    
-    const query = userIdOrUid?.match(/^[0-9a-fA-F]{24}$/) 
-      ? { _id: userIdOrUid } 
+
+    const query = userIdOrUid?.match(/^[0-9a-fA-F]{24}$/)
+      ? { _id: userIdOrUid }
       : { uid: userIdOrUid };
 
     const user = await User.findOne(query);
-    
+
     if (!user) {
-      return { success: false, message: 'ইউজার পাওয়া যায়নি।' };
+      return { success: false, message: "ইউজার পাওয়া যায়নি।" };
     }
 
     if (user.isBlocked) {
-      return { 
-        success: false, 
-        isBlocked: true, 
-        message: 'আপনার অ্যাকাউন্টটি ব্লক থাকায় এই সেবাটি বন্ধ রয়েছে।' 
+      return {
+        success: false,
+        isBlocked: true,
+        message: "আপনার অ্যাকাউন্টটি ব্লক থাকায় এই সেবাটি বন্ধ রয়েছে।",
       };
     }
 
     return { success: true, user };
   } catch (error) {
-    return { success: false, message: 'সার্ভার এরর: ' + error.message };
+    return { success: false, message: "সার্ভার এরর: " + error.message };
   }
 }
-
 
 // ==========================================
 // ২. HttpOnly কুকি ভিত্তিক অথ ও পারমিশন হেল্পার (Secure, RBAC & Auto Audit Log)
 // ==========================================
 
-export async function verifyAuth(requiredRole = 'user', requiredPermission = null, req = null, customAction = null) {
+export async function verifyAuth(
+  requiredRole = "user",
+  requiredPermission = null,
+  req = null,
+  customAction = null,
+) {
   try {
     await dbConnect();
     const cookieStore = await cookies();
 
-    const token = cookieStore.get('token')?.value;
+    const token = cookieStore.get("token")?.value;
 
     if (!token) {
-      return { 
-        success: false, 
-        status: 401, 
-        message: 'অনুমোদিত নয়! কোনো বৈধ সেশন কুকি পাওয়া যায়নি।' 
+      return {
+        success: false,
+        status: 401,
+        message: "অনুমোদিত নয়! কোনো বৈধ সেশন কুকি পাওয়া যায়নি।",
       };
     }
 
     let decoded;
     try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
+      decoded = jwt.verify(token, process.env.JWT_SECRET, {
+        algorithms: ["HS256"],
+      });
     } catch (err) {
-      return { 
-        success: false, 
-        status: 401, 
-        message: 'মেয়াদোত্তীর্ণ বা অবৈধ সেশন টোকেন!' 
+      return {
+        success: false,
+        status: 401,
+        message: "মেয়াদোত্তীর্ণ বা অবৈধ সেশন টোকেন!",
       };
     }
 
@@ -665,50 +114,53 @@ export async function verifyAuth(requiredRole = 'user', requiredPermission = nul
     if (userPhone) conditions.push({ phone: userPhone });
 
     if (conditions.length === 0) {
-      return { 
-        success: false, 
-        status: 401, 
-        message: 'টোকেনে কোনো বৈধ ইউজার আইডি নেই!' 
+      return {
+        success: false,
+        status: 401,
+        message: "টোকেনে কোনো বৈধ ইউজার আইডি নেই!",
       };
     }
 
     const dbUser = await User.findOne({ $or: conditions }).lean();
 
     if (!dbUser) {
-      return { 
-        success: false, 
-        status: 401, 
-        message: 'ইউজার ডাটাবেজে খুঁজে পাওয়া যায়নি।' 
+      return {
+        success: false,
+        status: 401,
+        message: "ইউজার ডাটাবেজে খুঁজে পাওয়া যায়নি।",
       };
     }
 
     // 🛑 কঠোর ব্লক চেক: ইউজার বা সাব-অ্যাডমিন ব্লক থাকলে 403 স্ট্যাটাস ও isBlocked: true রিটার্ন করবে
     if (dbUser.isBlocked === true) {
-      return { 
-        success: false, 
-        status: 403, 
+      return {
+        success: false,
+        status: 403,
         isBlocked: true, // ✅ ফ্রন্টএন্ড বা এপিআই হ্যান্ডলারের জন্য জরুরি
-        message: 'আপনার অ্যাকাউন্টটি ব্লক করা হয়েছে।' 
+        message: "আপনার অ্যাকাউন্টটি ব্লক করা হয়েছে।",
       };
     }
 
     // 🌟 ৩. রোল ও পারমিশন লজিক (Role & Permission Check)
-    if (requiredRole === 'admin') {
-      if (dbUser.role === 'admin') {
+    if (requiredRole === "admin") {
+      if (dbUser.role === "admin") {
         await handleAutoAuditLog(req, dbUser, customAction);
         return { success: true, user: dbUser };
       }
 
-      if (dbUser.role === 'sub-admin') {
+      if (dbUser.role === "sub-admin") {
         if (requiredPermission) {
-          if (dbUser.permissions && dbUser.permissions.includes(requiredPermission)) {
+          if (
+            dbUser.permissions &&
+            dbUser.permissions.includes(requiredPermission)
+          ) {
             await handleAutoAuditLog(req, dbUser, customAction);
             return { success: true, user: dbUser };
           } else {
-            return { 
-              success: false, 
-              status: 403, 
-              message: 'অ্যাক্সেস ডিনাইড! এই সেকশনটি দেখার আপনার অনুমতি নেই।' 
+            return {
+              success: false,
+              status: 403,
+              message: "অ্যাক্সেস ডিনাইড! এই সেকশনটি দেখার আপনার অনুমতি নেই।",
             };
           }
         }
@@ -716,21 +168,20 @@ export async function verifyAuth(requiredRole = 'user', requiredPermission = nul
         return { success: true, user: dbUser };
       }
 
-      return { 
-        success: false, 
-        status: 403, 
-        message: 'প্রবেশাধিকার নিষিদ্ধ! আপনার অ্যাডমিন পারমিশন নেই।' 
+      return {
+        success: false,
+        status: 403,
+        message: "প্রবেশাধিকার নিষিদ্ধ! আপনার অ্যাডমিন পারমিশন নেই।",
       };
     }
 
     return { success: true, user: dbUser };
-
   } catch (error) {
-    console.error('Auth verification error:', error);
-    return { 
-      success: false, 
-      status: 401, 
-      message: 'মেয়াদোত্তীর্ণ বা অবৈধ সেশন টোকেন!' 
+    console.error("Auth verification error:", error);
+    return {
+      success: false,
+      status: 401,
+      message: "মেয়াদোত্তীর্ণ বা অবৈধ সেশন টোকেন!",
     };
   }
 }
@@ -739,22 +190,25 @@ export async function verifyAuth(requiredRole = 'user', requiredPermission = nul
 async function handleAutoAuditLog(req, dbUser, customAction) {
   try {
     if (!req) return;
-    const method = req.method || 'UNKNOWN';
+    const method = req.method || "UNKNOWN";
 
-    if (['POST', 'PATCH', 'PUT', 'DELETE'].includes(method)) {
-      const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || '127.0.0.1';
-      const pathname = req.nextUrl ? req.nextUrl.pathname : 'API_ACTION';
+    if (["POST", "PATCH", "PUT", "DELETE"].includes(method)) {
+      const ip =
+        req.headers.get("x-forwarded-for") ||
+        req.headers.get("x-real-ip") ||
+        "127.0.0.1";
+      const pathname = req.nextUrl ? req.nextUrl.pathname : "API_ACTION";
 
       await AuditLog.create({
         adminId: dbUser._id,
-        adminPhone: dbUser.phone || dbUser.uid || 'Admin',
+        adminPhone: dbUser.phone || dbUser.uid || "Admin",
         action: customAction || `${method}_${pathname}`,
-        targetUser: 'N/A',
-        details: `${dbUser.role === 'sub-admin' ? 'সাব-অ্যাডমিন' : 'অ্যাডমিন'} (${dbUser.phone}) কর্তৃক ${pathname} এ রিকোয়েস্ট সম্পন্ন হয়েছে।`,
-        ipAddress: ip
+        targetUser: "N/A",
+        details: `${dbUser.role === "sub-admin" ? "সাব-অ্যাডমিন" : "অ্যাডমিন"} (${dbUser.phone}) কর্তৃক ${pathname} এ রিকোয়েস্ট সম্পন্ন হয়েছে।`,
+        ipAddress: ip,
       });
     }
   } catch (logErr) {
-    console.error('Auto audit log error:', logErr);
+    console.error("Auto audit log error:", logErr);
   }
 }
