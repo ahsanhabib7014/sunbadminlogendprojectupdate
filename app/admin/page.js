@@ -667,6 +667,7 @@ export default function AdminHomePage() {
           >
             <input
               type="text"
+              inputMode="numeric"
               placeholder="ফোন, আইডি বা আইপি..."
               value={searchQuery}
               onChange={(e) => {
